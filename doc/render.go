@@ -2,6 +2,9 @@ package doc
 
 import (
 	"encoding/json"
+	"regexp"
+	"strings"
+
 	//	"fmt"
 	"io"
 	//	"reflect"
@@ -427,8 +430,11 @@ func (r *JSONRenderer) Render(w io.Writer, source []byte, n ast.Node) error {
 			return err
 		}
 	}
-
-	b, err := json.MarshalIndent(r.document, "", "  ")
+	vulnerability, err := docToCve(r.document)
+	if err != nil {
+		return err
+	}
+	b, err := json.MarshalIndent(vulnerability, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -438,4 +444,168 @@ func (r *JSONRenderer) Render(w io.Writer, source []byte, n ast.Node) error {
 
 func (*JSONRenderer) AddOptions(...renderer.Option) {
 	// panic("No options for ADF renderer")
+}
+
+type Content struct {
+	Description     string    `json:"description,omitempty"`
+	ComponentName   string    `json:"component_name,omitempty"`
+	AffectedVersion []Version `json:"affected_version,omitempty"`
+	FixedVersion    []Version `json:"fixed_version,omitempty"`
+}
+
+func docToCve(document *Node) (*Content, error) {
+	var affectedVersion []Version
+	var fixedVersion []Version
+	var description strings.Builder
+	var parseAffected, parseFixed bool
+	var compName string
+
+	for _, n := range document.Content {
+		switch n.Type {
+		case NodeTypeParagraph:
+			for _, c := range n.Content {
+				if strings.Contains(strings.ToLower(c.Text), "affected versions") {
+					affectedVersion = extractAffectedVersions(n)
+					continue
+				}
+				if strings.Contains(strings.ToLower(c.Text), "fixed versions") {
+					fixedVersion = extractFixedVersions(n)
+					continue
+				}
+				description.WriteString(c.Text)
+			}
+		case NodeTypeHeading:
+			if strings.Contains(strings.ToLower(n.Text), "affected versions") {
+				parseAffected = true
+				continue
+			}
+			if strings.Contains(strings.ToLower(n.Text), "fixed versions") {
+				parseFixed = true
+				continue
+			}
+			description.WriteString(n.Text)
+		case NodeTypeBulletList:
+			if parseAffected {
+				for _, c := range n.Content {
+					for _, t := range c.Content {
+						affectedVersion, compName = extractAffectedVersionsList(t)
+					}
+				}
+				parseAffected = false
+			}
+			if parseFixed {
+				for _, c := range n.Content {
+					for _, t := range c.Content {
+						affectedVersion = extractFixedVersionsList(t)
+					}
+				}
+				parseFixed = false
+			}
+			description.WriteString(n.Text)
+		}
+	}
+	return &Content{
+		Description:     description.String(),
+		AffectedVersion: affectedVersion,
+		FixedVersion:    fixedVersion,
+		ComponentName:   compName,
+	}, nil
+}
+
+type Version struct {
+	From  string `json:"from,omitempty"`
+	To    string `json:"to,omitempty"`
+	Fixed string `json:"fixed,omitempty"`
+}
+
+func extractAffectedVersions(node *Node) []Version {
+	versions := make([]Version, 0)
+	if len(node.Content) > 3 {
+		for i := 3; i < len(node.Content); i = i + 2 {
+			from := node.Content[i-1].Text
+			to := node.Content[i].Text
+			v := Version{
+				From: sanitizeVersion(from),
+				To:   sanitizeVersion(to),
+			}
+			versions = append(versions, v)
+		}
+	}
+	return versions
+}
+
+func extractAffectedVersionsList(node *Node) ([]Version, string) {
+	versions := make([]Version, 0)
+	var compName string
+	if len(node.Content) > 1 {
+		for i := 1; i < len(node.Content); i = i + 2 {
+			var from, to string
+			compName, from = extractNameVersion(node.Content[i-1].Text)
+			_, to = extractNameVersion(node.Content[i].Text)
+			v := Version{
+				From: sanitizeVersion(from),
+				To:   sanitizeVersion(to),
+			}
+			versions = append(versions, v)
+		}
+	}
+	return versions, compName
+}
+
+func extractFixedVersionsList(node *Node) []Version {
+	versions := make([]Version, 0)
+
+	if len(node.Content) > 1 {
+		for i := 0; i < len(node.Content); i++ {
+			fixed := sanitizeVersion(node.Content[i].Text)
+			v := Version{
+				Fixed: sanitizeVersion(fixed),
+			}
+			versions = append(versions, v)
+		}
+	}
+	return versions
+}
+
+func extractFixedVersions(node *Node) []Version {
+	versions := make([]Version, 0)
+
+	if len(node.Content) > 2 {
+		for i := 2; i < len(node.Content); i++ {
+			fixed := sanitizeVersion(node.Content[i].Text)
+			v := Version{
+				Fixed: sanitizeVersion(fixed),
+			}
+			versions = append(versions, v)
+		}
+	}
+	return versions
+}
+
+func sanitizeVersion(version string) string {
+	if version == "<=" {
+		return "0.0.0"
+	}
+	if version == ">=" {
+		return "2.0.0"
+	}
+	ver := strings.ReplaceAll(version, "v", "")
+	ver = strings.TrimSpace(strings.ReplaceAll(ver, "-", ""))
+	return ver
+}
+
+func extractNameVersion(nameVersion string) (string, string) {
+	pattern := `^(?P<name>[^\s]+)\s+v(?P<version>\d+\.\d+\.\d+)`
+
+	// Compile the regex pattern
+	regex := regexp.MustCompile(pattern)
+
+	// Find the matches in the string
+	matches := regex.FindStringSubmatch(nameVersion)
+
+	// Extract the captured groups
+	if len(matches) < 3 {
+		return "", nameVersion
+	}
+	return matches[1], matches[2]
 }
