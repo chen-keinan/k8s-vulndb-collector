@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"strings"
 
 	"github.com/yuin/goldmark"
@@ -13,8 +12,14 @@ import (
 	"github.com/yuin/goldmark/parser"
 )
 
+const (
+	paragraph = `^\*[\s\S]*\*$`
+	versions  = `\s*(\d+\.\d+\.\d+)\s*`
+	header    = `(^#{1,6}\s*[\S]+)`
+)
+
 type Vulnerability struct {
-	ID              string    `json:"version,omitempty"`
+	ID              string    `json:"id,omitempty"`
 	CreatedAt       string    `json:"created_at,omitempty"`
 	Summary         string    `json:"summary,omitempty"`
 	Component       string    `json:"component,omitempty"`
@@ -27,7 +32,7 @@ type Vulnerability struct {
 }
 
 type K8sVulnDB struct {
-	Vulnerabilities []Vulnerability
+	Cves []Vulnerability
 }
 
 func ParseVulneDB(vulnDB []byte) (*K8sVulnDB, error) {
@@ -75,7 +80,7 @@ func ParseVulneDB(vulnDB []byte) (*K8sVulnDB, error) {
 		vulnerabilities = append(vulnerabilities, vulnerability)
 	}
 	return &K8sVulnDB{
-		Vulnerabilities: vulnerabilities,
+		Cves: vulnerabilities,
 	}, nil
 }
 
@@ -84,17 +89,10 @@ func amendDoc(doc string) string {
 	docReader := strings.NewReader(doc)
 	fileScanner := bufio.NewScanner(docReader)
 	fileScanner.Split(bufio.ScanLines)
-	paragraph := `^\*[\s\S]*\*$`
-	versions := `\s*(\d+\.\d+\.\d+)\s*`
-	header := `(^#{1,6}\s*[\S]+)`
 	var prevHeader string
 	for fileScanner.Scan() {
 		line := fileScanner.Text()
-		// Compile the regex pattern
-		regex := regexp.MustCompile(paragraph)
-		// Find the matches in the string
-		matches := regex.FindStringSubmatch(line)
-		if len(matches) > 0 {
+		if matchRegEx(paragraph, line) {
 			if strings.Contains(strings.ToLower(line), "affected versions") {
 				lineWriter.WriteString(fmt.Sprintf("%s\n", "#### Affected Versions"))
 				continue
@@ -104,22 +102,17 @@ func amendDoc(doc string) string {
 				continue
 			}
 		}
-		versionRegex := regexp.MustCompile(versions)
-		// Find the matches in the string
-		versionMatches := versionRegex.FindStringSubmatch(line)
-		if len(versionMatches) > 0 && !strings.HasPrefix(line, "-") {
+		if matchRegEx(versions, line) && !strings.HasPrefix(line, "-") {
 			lineWriter.WriteString(fmt.Sprintf("%s\n", fmt.Sprintf("- %s", line)))
 			continue
 		}
-		if strings.Contains(strings.ToLower(prevHeader), "affected versions") || strings.Contains(strings.ToLower(prevHeader), "fixed versions") {
+		if strings.Contains(strings.ToLower(prevHeader), "affected versions") ||
+			strings.Contains(strings.ToLower(prevHeader), "fixed versions") {
 			if len(strings.TrimSpace(line)) == 0 {
 				continue
 			}
 		}
-		headerRegex := regexp.MustCompile(header)
-		// Find the matches in the string
-		headerMatches := headerRegex.FindStringSubmatch(line)
-		if len(headerMatches) > 0 {
+		if matchRegEx(header, line) {
 			prevHeader = line
 		}
 		lineWriter.WriteString(fmt.Sprintf("%s\n", line))
