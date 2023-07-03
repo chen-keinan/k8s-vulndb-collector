@@ -464,15 +464,6 @@ func docToCve(document *Node) (*Content, error) {
 		switch n.Type {
 		case NodeTypeParagraph:
 			for _, c := range n.Content {
-				if strings.Contains(strings.ToLower(c.Text), "affected versions") {
-					if len(n.Content) > 1 {
-						affectedVersion = extractAffectedVersions(n)
-						continue
-					} else {
-						parseAffected = true
-						continue
-					}
-				}
 				if strings.Contains(strings.ToLower(c.Text), "fixed versions") {
 					if len(n.Content) > 1 {
 						fixedVersion = extractFixedVersions(n)
@@ -543,22 +534,6 @@ type Version struct {
 	Fixed string `json:"fixed,omitempty"`
 }
 
-func extractAffectedVersions(node *Node) []Version {
-	versions := make([]Version, 0)
-	if len(node.Content) > 3 {
-		for i := 3; i < len(node.Content); i = i + 2 {
-			from := node.Content[i-1].Text
-			to := node.Content[i].Text
-			v := Version{
-				From: sanitizeVersion(from),
-				To:   sanitizeVersion(to),
-			}
-			versions = append(versions, v)
-		}
-	}
-	return versions
-}
-
 func extractAffectedVersionsList(node *Node) ([]Version, string) {
 	versions := make([]Version, 0)
 	var compName string
@@ -606,10 +581,13 @@ func extractFixedVersions(node *Node) []Version {
 	if len(node.Content) > 2 {
 		for i := 2; i < len(node.Content); i++ {
 			fixed := sanitizeVersion(node.Content[i].Text)
-			v := Version{
-				Fixed: sanitizeVersion(fixed),
+			if _, err := version.Parse(fixed); err == nil {
+				v := Version{
+					Fixed: sanitizeVersion(fixed),
+				}
+				versions = append(versions, v)
 			}
-			versions = append(versions, v)
+
 		}
 	}
 	return versions
