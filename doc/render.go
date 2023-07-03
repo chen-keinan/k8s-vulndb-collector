@@ -359,14 +359,6 @@ func (r *JSONRenderer) walkNode(source []byte, node ast.Node, entering bool) ast
 		}}
 		r.context.PushContent(jsonNode)
 		return ast.WalkSkipChildren
-
-	case *ast.Image:
-		// if entering {
-		// 	children := r.renderChildren(source, n)
-		// 	r.image(tnode.Destination, tnode.Title, children)
-		// }
-		// return ast.WalkSkipChildren
-
 	case *ast.FencedCodeBlock:
 		jsonNode.Attributes = &Attributes{
 			Language: string(n.Language(source)),
@@ -385,34 +377,7 @@ func (r *JSONRenderer) walkNode(source []byte, node ast.Node, entering bool) ast
 		return ast.WalkSkipChildren
 
 	case *ast.HTMLBlock:
-		// if entering {
-		// 	r.blockHtml(tnode, source)
-		// }
 	case *ast.RawHTML:
-		// if entering {
-		// 	r.rawHtml(tnode, source)
-		// }
-		// return ast.WalkSkipChildren
-	case *extAst.Table:
-		// r.table(tnode, entering)
-	case *extAst.TableHeader:
-		// if entering {
-		// 	r.tableIsHeader = true
-		// }
-	case *extAst.TableRow:
-		// if entering {
-		// 	r.tableIsHeader = false
-		// }
-	case *extAst.TableCell:
-		// if entering {
-		// 	children := r.renderChildren(source, n)
-		// 	if r.tableIsHeader {
-		// 		r.tableHeaderCell(children, tnode.Alignment)
-		// 	} else {
-		// 		r.tableCell(children)
-		// 	}
-		// }
-		// return ast.WalkSkipChildren
 	default:
 		panic("unknown type " + n.Kind().String())
 	}
