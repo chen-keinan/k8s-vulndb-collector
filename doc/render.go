@@ -9,6 +9,7 @@ import (
 	"io"
 	//	"reflect"
 
+	"github.com/aquasecurity/go-version/pkg/version"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
@@ -19,7 +20,6 @@ import (
 
 var _ renderer.Renderer = &JSONRenderer{}
 
-// ADFRenderer implements goldmark.Renderer
 type JSONRenderer struct {
 	document *Node          // Root node
 	context  blockNodeStack // Track where we are in the structure of the document
@@ -108,8 +108,8 @@ const (
 
 type blockNodeStack struct {
 	data          []*Node
-	ignoreBlocks  bool    // ADF does not support some forms of nesting that markdown does, so we sometimes ignore non-paragraph block nodes
-	ignoredBlocks []*Node // Contains the root block and its children when a block node can only contain content
+	ignoreBlocks  bool    
+	ignoredBlocks []*Node 
 }
 
 func (s *blockNodeStack) PushContent(node *Node) {
@@ -206,7 +206,7 @@ func Render(w io.Writer, source []byte) error {
 	return gm.Convert(source, w)
 }
 
-func astToADFType(node ast.Node) NodeType {
+func astToJSONType(node ast.Node) NodeType {
 	switch n := node.(type) {
 	case *ast.Document:
 	case *ast.Paragraph,
@@ -256,17 +256,16 @@ func (r *JSONRenderer) walkNode(source []byte, node ast.Node, entering bool) ast
 	//fmt.Printf("Node: %s, entering: %v, value: %q, children: %d\n", reflect.TypeOf(node).String(), entering, string(node.Text(source)), node.ChildCount())
 
 	if !entering {
-		if !inlineType(astToADFType(node)) {
+		if !inlineType(astToJSONType(node)) {
 			r.context.PopBlockNode()
 		}
 		return ast.WalkContinue
 	}
 
-	jsonNode := &Node{Type: astToADFType(node)}
+	jsonNode := &Node{Type: astToJSONType(node)}
 
 	switch n := node.(type) {
 	case *ast.Document:
-		// Nothing to do, the root ADF node is fixed.
 
 	case *ast.Paragraph,
 		*ast.TextBlock, // Untested
@@ -278,8 +277,6 @@ func (r *JSONRenderer) walkNode(source []byte, node ast.Node, entering bool) ast
 
 	case *ast.Blockquote:
 		r.context.PushBlockNode(jsonNode)
-
-		// ADF only supports paragraphs inside block quotes, no nested block quotes
 		r.context.IgnoreNestedBlocks(jsonNode)
 
 	case *ast.Heading:
@@ -430,11 +427,11 @@ func (r *JSONRenderer) Render(w io.Writer, source []byte, n ast.Node) error {
 			return err
 		}
 	}
-	vulnerability, err := docToCve(r.document)
+	vulns, err := docToCve(r.document)
 	if err != nil {
 		return err
 	}
-	b, err := json.MarshalIndent(vulnerability, "", "  ")
+	b, err := json.MarshalIndent(vulns, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -443,7 +440,6 @@ func (r *JSONRenderer) Render(w io.Writer, source []byte, n ast.Node) error {
 }
 
 func (*JSONRenderer) AddOptions(...renderer.Option) {
-	// panic("No options for ADF renderer")
 }
 
 type Content struct {
@@ -454,8 +450,8 @@ type Content struct {
 }
 
 func docToCve(document *Node) (*Content, error) {
-	var affectedVersion []Version
-	var fixedVersion []Version
+	affectedVersion := make([]Version, 0)
+	fixedVersion := make([]Version, 0)
 	var description strings.Builder
 	var parseAffected, parseFixed bool
 	var compName string
@@ -488,7 +484,11 @@ func docToCve(document *Node) (*Content, error) {
 			if parseAffected {
 				for _, c := range n.Content {
 					for _, t := range c.Content {
-						affectedVersion, compName = extractAffectedVersionsList(t)
+						subAffectedVersion, cname := extractAffectedVersionsList(t)
+						affectedVersion = append(affectedVersion, subAffectedVersion...)
+						if len(compName) == 0 {
+							compName = cname
+						}
 					}
 				}
 				parseAffected = false
@@ -496,7 +496,8 @@ func docToCve(document *Node) (*Content, error) {
 			if parseFixed {
 				for _, c := range n.Content {
 					for _, t := range c.Content {
-						affectedVersion = extractFixedVersionsList(t)
+						subFixedVersion := extractFixedVersionsList(t)
+						fixedVersion = append(fixedVersion, subFixedVersion...)
 					}
 				}
 				parseFixed = false
@@ -554,14 +555,17 @@ func extractAffectedVersionsList(node *Node) ([]Version, string) {
 
 func extractFixedVersionsList(node *Node) []Version {
 	versions := make([]Version, 0)
-
 	if len(node.Content) > 1 {
 		for i := 0; i < len(node.Content); i++ {
-			fixed := sanitizeVersion(node.Content[i].Text)
-			v := Version{
-				Fixed: sanitizeVersion(fixed),
+			var fixed string
+			_, fixed = extractNameVersion(node.Content[i].Text)
+			fixed = sanitizeVersion(fixed)
+			if _, err := version.Parse(fixed); err == nil {
+				v := Version{
+					Fixed: sanitizeVersion(fixed),
+				}
+				versions = append(versions, v)
 			}
-			versions = append(versions, v)
 		}
 	}
 	return versions
@@ -595,6 +599,10 @@ func sanitizeVersion(version string) string {
 }
 
 func extractNameVersion(nameVersion string) (string, string) {
+	if strings.Contains(nameVersion, "<=") {
+		nameVersionParts := strings.Split(nameVersion, "<=")
+		return strings.TrimSpace(nameVersionParts[0]), "0.0.0"
+	}
 	pattern := `^(?P<name>[^\s]+)\s+v(?P<version>\d+\.\d+\.\d+)`
 
 	// Compile the regex pattern
