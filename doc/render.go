@@ -108,8 +108,8 @@ const (
 
 type blockNodeStack struct {
 	data          []*Node
-	ignoreBlocks  bool    
-	ignoredBlocks []*Node 
+	ignoreBlocks  bool
+	ignoredBlocks []*Node
 }
 
 func (s *blockNodeStack) PushContent(node *Node) {
@@ -461,21 +461,31 @@ func docToCve(document *Node) (*Content, error) {
 		case NodeTypeParagraph:
 			for _, c := range n.Content {
 				if strings.Contains(strings.ToLower(c.Text), "affected versions") {
-					affectedVersion = extractAffectedVersions(n)
-					continue
+					if len(n.Content) > 1 {
+						affectedVersion = extractAffectedVersions(n)
+						continue
+					} else {
+						parseAffected = true
+						continue
+					}
 				}
 				if strings.Contains(strings.ToLower(c.Text), "fixed versions") {
-					fixedVersion = extractFixedVersions(n)
-					continue
+					if len(n.Content) > 1 {
+						fixedVersion = extractFixedVersions(n)
+						continue
+					} else {
+						parseFixed = true
+						continue
+					}
 				}
 				description.WriteString(c.Text)
 			}
 		case NodeTypeHeading:
-			if strings.Contains(strings.ToLower(n.Text), "affected versions") {
+			if strings.Contains(strings.ToLower(n.Text), "affected versions") && len(affectedVersion) == 0 {
 				parseAffected = true
 				continue
 			}
-			if strings.Contains(strings.ToLower(n.Text), "fixed versions") {
+			if strings.Contains(strings.ToLower(n.Text), "fixed versions") && len(fixedVersion) == 0 {
 				parseFixed = true
 				continue
 			}
@@ -542,11 +552,16 @@ func extractAffectedVersionsList(node *Node) ([]Version, string) {
 		for i := 1; i < len(node.Content); i = i + 2 {
 			var from, to string
 			compName, from = extractNameVersion(node.Content[i-1].Text)
-			_, to = extractNameVersion(node.Content[i].Text)
-			v := Version{
-				From: sanitizeVersion(from),
-				To:   sanitizeVersion(to),
+			v := Version{}
+			if _, err := version.Parse(from); err == nil {
+				v.From = sanitizeVersion(from)
 			}
+			_, to = extractNameVersion(node.Content[i].Text)
+			sanitazedTo := sanitizeVersion(to)
+			if len(v.From) == 0 {
+				v.From = sanitazedTo
+			}
+			v.To = sanitazedTo
 			versions = append(versions, v)
 		}
 	}
@@ -555,7 +570,7 @@ func extractAffectedVersionsList(node *Node) ([]Version, string) {
 
 func extractFixedVersionsList(node *Node) []Version {
 	versions := make([]Version, 0)
-	if len(node.Content) > 1 {
+	if len(node.Content) > 0 {
 		for i := 0; i < len(node.Content); i++ {
 			var fixed string
 			_, fixed = extractNameVersion(node.Content[i].Text)
@@ -594,6 +609,7 @@ func sanitizeVersion(version string) string {
 		return "2.0.0"
 	}
 	ver := strings.ReplaceAll(version, "v", "")
+	ver = strings.ReplaceAll(ver, "V", "")
 	ver = strings.TrimSpace(strings.ReplaceAll(ver, "-", ""))
 	return ver
 }
@@ -601,6 +617,10 @@ func sanitizeVersion(version string) string {
 func extractNameVersion(nameVersion string) (string, string) {
 	if strings.Contains(nameVersion, "<=") {
 		nameVersionParts := strings.Split(nameVersion, "<=")
+		return strings.TrimSpace(nameVersionParts[0]), "0.0.0"
+	}
+	if strings.Contains(nameVersion, "<") {
+		nameVersionParts := strings.Split(nameVersion, "<")
 		return strings.TrimSpace(nameVersionParts[0]), "0.0.0"
 	}
 	pattern := `^(?P<name>[^\s]+)\s+v(?P<version>\d+\.\d+\.\d+)`

@@ -1,8 +1,12 @@
 package doc
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"regexp"
+	"strings"
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
@@ -44,7 +48,9 @@ func ParseVulneDB(vulnDB []byte) (*K8sVulnDB, error) {
 		vulnDoc := new(bytes.Buffer)
 		i := item.(map[string]interface{})
 		contentText := i["content_text"].(string)
-		err = gm.Convert([]byte(contentText), vulnDoc)
+		amendedDoc := amendDoc(contentText)
+		//		fmt.Print(amendedDoc)
+		err = gm.Convert([]byte(amendedDoc), vulnDoc)
 		if err != nil {
 			return nil, err
 		}
@@ -67,4 +73,52 @@ func ParseVulneDB(vulnDB []byte) (*K8sVulnDB, error) {
 	return &K8sVulnDB{
 		Vulnerabilities: vulnerabilities,
 	}, nil
+}
+
+func amendDoc(doc string) string {
+	var lineWriter bytes.Buffer
+	docReader := strings.NewReader(doc)
+	fileScanner := bufio.NewScanner(docReader)
+	fileScanner.Split(bufio.ScanLines)
+	paragraph := `^\*[\s\S]*\*$`
+	versions := `\s*(\d+\.\d+\.\d+)\s*`
+	header := `(^#{1,6}\s*[\S]+)`
+	var prevHeader string
+	for fileScanner.Scan() {
+		line := fileScanner.Text()
+		// Compile the regex pattern
+		regex := regexp.MustCompile(paragraph)
+		// Find the matches in the string
+		matches := regex.FindStringSubmatch(line)
+		if len(matches) > 0 {
+			if strings.Contains(strings.ToLower(line), "affected versions") {
+				lineWriter.WriteString(fmt.Sprintf("%s\n", "#### Affected Versions"))
+				continue
+			}
+			if strings.Contains(strings.ToLower(line), "fixed versions") {
+				lineWriter.WriteString(fmt.Sprintf("%s\n", "#### Fixed Versions"))
+				continue
+			}
+		}
+		versionRegex := regexp.MustCompile(versions)
+		// Find the matches in the string
+		versionMatches := versionRegex.FindStringSubmatch(line)
+		if len(versionMatches) > 0 && !strings.HasPrefix(line, "-") {
+			lineWriter.WriteString(fmt.Sprintf("%s\n", fmt.Sprintf("- %s", line)))
+			continue
+		}
+		if strings.Contains(strings.ToLower(prevHeader), "affected versions") || strings.Contains(strings.ToLower(prevHeader), "fixed versions") {
+			if len(strings.TrimSpace(line)) == 0 {
+				continue
+			}
+		}
+		headerRegex := regexp.MustCompile(header)
+		// Find the matches in the string
+		headerMatches := headerRegex.FindStringSubmatch(line)
+		if len(headerMatches) > 0 {
+			prevHeader = line
+		}
+		lineWriter.WriteString(fmt.Sprintf("%s\n", line))
+	}
+	return lineWriter.String()
 }
