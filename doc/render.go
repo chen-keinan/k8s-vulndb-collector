@@ -622,10 +622,7 @@ func sanitizeVersion(version string) string {
 	if version == ">=" {
 		return "2.0.0"
 	}
-	ver := strings.ReplaceAll(version, "v", "")
-	ver = strings.ReplaceAll(ver, "V", "")
-	ver = strings.TrimSpace(strings.ReplaceAll(ver, "-", ""))
-	return ver
+	return trimString(version, []string{"v", "V"})
 }
 
 func extractNameVersion(nameVersion string) (string, string) {
@@ -653,42 +650,14 @@ func extractNameVersion(nameVersion string) (string, string) {
 }
 
 func addionalDataFromDescription(description string) AdditionalFields {
-	var cvss string
-	var component string
-	cvssIndex := strings.Index(description, "CVSS:")
-	if cvssIndex != -1 {
-		splittedCvss := strings.Split(description[cvssIndex:], " ")
-		if len(splittedCvss) > 0 {
-			cvss = strings.Trim(splittedCvss[0], ")")
-		}
-	}
-	compIndex := strings.Index(description, "This bug affects")
-	if compIndex != -1 {
-		splittedComp := strings.Split(description[compIndex:], ".")
-		if len(splittedComp) > 0 {
-			component = strings.ToLower(strings.ReplaceAll(splittedComp[0], "This bug affects ", ""))
-		}
-	}
-	if len(component) == 0 {
-		if strings.Contains(strings.ToLower(description), "kube-apiserver") {
-			component = "kube-apiserver"
-		}
-	}
-	if len(component) == 0 {
-		if strings.Contains(strings.ToLower(description), "etcd") {
-			component = "etcd"
-		}
-	}
-	if len(component) == 0 {
-		if strings.Contains(strings.ToLower(description), "kubelet") {
-			component = "kubelet"
-		}
-	}
-	if len(component) == 0 {
-		if strings.Contains(strings.ToLower(description), "kube-controller-manager") {
-			component = "kube-controller-manager"
-		}
-	}
+	cvss := lookForCvssInDesc(description)
+	component := lookForComponentInDesc(description, []string{
+		"kube-controller-manager",
+		"kubelet",
+		"etcd",
+		"kube-apiserver",
+	},
+	)
 	return AdditionalFields{
 		Cvss:      cvss,
 		Component: component,
@@ -699,4 +668,30 @@ type AdditionalFields struct {
 	Cvss      string
 	Score     string
 	Component string
+}
+
+func lookForComponentInDesc(description string, coreCompArr []string) string {
+	compIndex := strings.Index(description, "This bug affects")
+	if compIndex != -1 {
+		splittedComp := strings.Split(description[compIndex:], ".")
+		if len(splittedComp) > 0 {
+			return strings.ToLower(strings.ReplaceAll(splittedComp[0], "This bug affects ", ""))
+		}
+	}
+	for _, c := range coreCompArr {
+		if strings.Contains(strings.ToLower(description), c) {
+			return c
+		}
+	}
+	return ""
+}
+func lookForCvssInDesc(description string) string {
+	cvssIndex := strings.Index(description, "CVSS:")
+	if cvssIndex != -1 {
+		splittedCvss := strings.Split(description[cvssIndex:], " ")
+		if len(splittedCvss) > 0 {
+			return strings.Trim(splittedCvss[0], ")")
+		}
+	}
+	return ""
 }
