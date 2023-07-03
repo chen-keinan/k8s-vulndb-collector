@@ -17,10 +17,12 @@ type Vulnerability struct {
 	ID              string    `json:"version,omitempty"`
 	CreatedAt       string    `json:"created_at,omitempty"`
 	Summary         string    `json:"summary,omitempty"`
+	Component       string    `json:"component,omitempty"`
 	Description     string    `json:"description,omitempty"`
 	AffectedVersion []Version `json:"affected_version,omitempty"`
 	FixedVersion    []Version `json:"fixed_version,omitempty"`
 	Urls            []string  `json:"urls,omitempty"`
+	Cvss            string    `json:"cvss,omitempty"`
 	ExrenalUrls     []string  `json:"exretnal_urls,omitempty"`
 }
 
@@ -67,6 +69,8 @@ func ParseVulneDB(vulnDB []byte) (*K8sVulnDB, error) {
 			AffectedVersion: c.AffectedVersion,
 			FixedVersion:    c.FixedVersion,
 			Description:     c.Description,
+			Component:       c.ComponentName,
+			Cvss:            c.Cvss,
 		}
 		vulnerabilities = append(vulnerabilities, vulnerability)
 	}

@@ -2,12 +2,11 @@ package doc
 
 import (
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"strings"
 
-	//	"fmt"
 	"io"
-	//	"reflect"
 
 	"github.com/aquasecurity/go-version/pkg/version"
 	"github.com/yuin/goldmark"
@@ -19,6 +18,10 @@ import (
 )
 
 var _ renderer.Renderer = &JSONRenderer{}
+
+const (
+	upstreamRepo = "github.com/kubernetes"
+)
 
 type JSONRenderer struct {
 	document *Node          // Root node
@@ -447,6 +450,7 @@ type Content struct {
 	ComponentName   string    `json:"component_name,omitempty"`
 	AffectedVersion []Version `json:"affected_version,omitempty"`
 	FixedVersion    []Version `json:"fixed_version,omitempty"`
+	Cvss            string    `json:"cvss,omitempty"`
 }
 
 func docToCve(document *Node) (*Content, error) {
@@ -515,11 +519,21 @@ func docToCve(document *Node) (*Content, error) {
 			description.WriteString(n.Text)
 		}
 	}
+	splittedCompName := strings.Split(compName, " ")
+	if len(splittedCompName) == 2 {
+		compName = strings.TrimSpace(splittedCompName[1])
+	}
+	desc := description.String()
+	adi := addionalDataFromDescription(desc)
+	if len(compName) == 0 {
+		compName = adi.Component
+	}
 	return &Content{
 		Description:     description.String(),
 		AffectedVersion: affectedVersion,
 		FixedVersion:    fixedVersion,
-		ComponentName:   compName,
+		ComponentName:   fmt.Sprintf("%s/%s", upstreamRepo, compName),
+		Cvss:            adi.Cvss,
 	}, nil
 }
 
@@ -636,4 +650,53 @@ func extractNameVersion(nameVersion string) (string, string) {
 		return "", nameVersion
 	}
 	return matches[1], matches[2]
+}
+
+func addionalDataFromDescription(description string) AdditionalFields {
+	var cvss string
+	var component string
+	cvssIndex := strings.Index(description, "CVSS:")
+	if cvssIndex != -1 {
+		splittedCvss := strings.Split(description[cvssIndex:], " ")
+		if len(splittedCvss) > 0 {
+			cvss = strings.Trim(splittedCvss[0], ")")
+		}
+	}
+	compIndex := strings.Index(description, "This bug affects")
+	if compIndex != -1 {
+		splittedComp := strings.Split(description[compIndex:], ".")
+		if len(splittedComp) > 0 {
+			component = strings.ToLower(strings.ReplaceAll(splittedComp[0], "This bug affects ", ""))
+		}
+	}
+	if len(component) == 0 {
+		if strings.Contains(strings.ToLower(description), "kube-apiserver") {
+			component = "kube-apiserver"
+		}
+	}
+	if len(component) == 0 {
+		if strings.Contains(strings.ToLower(description), "etcd") {
+			component = "etcd"
+		}
+	}
+	if len(component) == 0 {
+		if strings.Contains(strings.ToLower(description), "kubelet") {
+			component = "kubelet"
+		}
+	}
+	if len(component) == 0 {
+		if strings.Contains(strings.ToLower(description), "kube-controller-manager") {
+			component = "kube-controller-manager"
+		}
+	}
+	return AdditionalFields{
+		Cvss:      cvss,
+		Component: component,
+	}
+}
+
+type AdditionalFields struct {
+	Cvss      string
+	Score     string
+	Component string
 }
