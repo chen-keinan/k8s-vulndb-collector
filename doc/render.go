@@ -42,10 +42,10 @@ func (n *Node) AddContent(c *Node) {
 }
 
 type Attributes struct {
-	Width    float32 `json:"width,omitempty"`    // For media single
-	Layout   Layout  `json:"layout,omitempty"`   // For media single
-	Level    int     `json:"level,omitempty"`    // For headings
-	Language string  `json:"language,omitempty"` // For fenced code blocks
+	Width    float32 `json:"width,omitempty"`
+	Layout   Layout  `json:"layout,omitempty"`
+	Level    int     `json:"level,omitempty"`
+	Language string  `json:"language,omitempty"`
 }
 
 type MarkStruct struct {
@@ -54,14 +54,12 @@ type MarkStruct struct {
 }
 
 type MarkAttributes struct {
-	Href  string `json:"href,omitempty"`  // For links
-	Title string `json:"title,omitempty"` // For links
+	Href  string `json:"href,omitempty"`
+	Title string `json:"title,omitempty"`
 }
 
-// NodeType represents the type of a node
 type NodeType string
 
-// Node types
 const (
 	NodeTypeNone        = "none"
 	NodeTypeBlockquote  = "blockquote"
@@ -205,7 +203,6 @@ func Render(w io.Writer, source []byte) error {
 		),
 		goldmark.WithRenderer(NewRenderer()),
 	)
-
 	return gm.Convert(source, w)
 }
 
@@ -251,13 +248,10 @@ func astToJSONType(node ast.Node) NodeType {
 	case *extAst.TableCell:
 		return NodeTypeTableCell
 	}
-
 	return NodeTypeNone
 }
 
 func (r *JSONRenderer) walkNode(source []byte, node ast.Node, entering bool) ast.WalkStatus {
-	//fmt.Printf("Node: %s, entering: %v, value: %q, children: %d\n", reflect.TypeOf(node).String(), entering, string(node.Text(source)), node.ChildCount())
-
 	if !entering {
 		if !inlineType(astToJSONType(node)) {
 			r.context.PopBlockNode()
@@ -271,11 +265,11 @@ func (r *JSONRenderer) walkNode(source []byte, node ast.Node, entering bool) ast
 	case *ast.Document:
 
 	case *ast.Paragraph,
-		*ast.TextBlock, // Untested
+		*ast.TextBlock,
 		*ast.List,
 		*ast.ListItem,
 		*ast.ThematicBreak,
-		*ast.CodeBlock: // Untested
+		*ast.CodeBlock:
 		r.context.PushBlockNode(jsonNode)
 
 	case *ast.Blockquote:
@@ -292,10 +286,10 @@ func (r *JSONRenderer) walkNode(source []byte, node ast.Node, entering bool) ast
 	case *ast.Text:
 		jsonNode.Text = string(n.Text(source))
 		if len(jsonNode.Text) == 0 {
-			// TODO: Uh what's happening here? Not sure why goldmark is splitting up paragraph text in this way.
+
 			jsonNode.Text = " "
 		}
-		if len(r.context.data[len(r.context.data)-1].Text) > 0 { //&& r.context.data[len(r.context.data)-1].Type == "heading" {
+		if len(r.context.data[len(r.context.data)-1].Text) > 0 {
 
 		} else {
 			r.context.PushContent(jsonNode)
@@ -306,10 +300,9 @@ func (r *JSONRenderer) walkNode(source []byte, node ast.Node, entering bool) ast
 			r.context.PushContent(lineBreak)
 		}
 
-	case *ast.String: // Untested
+	case *ast.String:
 		jsonNode.Text = string(n.Text(source))
 		if len(jsonNode.Text) == 0 {
-			// TODO: Uh what's happening here? Not sure why goldmark is splitting up paragraph text in this way.
 			jsonNode.Text = " "
 		}
 		r.context.PushContent(jsonNode)

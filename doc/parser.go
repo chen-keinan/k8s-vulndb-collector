@@ -56,7 +56,6 @@ func ParseVulneDB(vulnDB []byte) (*K8sVulnDB, error) {
 		i := item.(map[string]interface{})
 		contentText := i["content_text"].(string)
 		amendedDoc := amendDoc(contentText)
-		//		fmt.Print(amendedDoc)
 		err = gm.Convert([]byte(amendedDoc), vulnDoc)
 		if err != nil {
 			return nil, err
