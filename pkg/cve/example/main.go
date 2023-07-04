@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/chen-keinan/k8s-vulndb-collector/pkg/cve"
@@ -94,7 +93,6 @@ func main() {
 		goldmark.WithRenderer(cve.NewRenderer()),
 	)
 	amendedDoc := cve.AmendCveDoc(data)
-	fmt.Println(amendedDoc)
 	err := gm.Convert([]byte(amendedDoc), os.Stdout)
 	if err != nil {
 		panic(err.Error())
