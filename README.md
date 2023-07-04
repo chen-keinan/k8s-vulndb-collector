@@ -50,5 +50,5 @@ This open source project collect data from k8s Vulnerability adviository and par
       "cvss": "CVSS:3.1/AV:L/AC:L/PR:H/UI:N/S:U/C:L/I:L/A:N",
       "severity": "Low",
       "score": 3.4
-    },
+    }
 ```
