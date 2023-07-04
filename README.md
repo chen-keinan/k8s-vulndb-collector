@@ -1,8 +1,8 @@
 ## k8s-vulnDB-collector
 
-This open source project collect data from k8s Vulnerability adviository and pars it to usabe json format
+This open source project collect data from k8s Vulnerability adviository and parse it to standard vulnerability doc in json format
 
-### example:
+### Example:
 
 ```json
 {
