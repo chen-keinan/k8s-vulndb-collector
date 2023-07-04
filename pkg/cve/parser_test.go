@@ -1,4 +1,4 @@
-package doc
+package cve
 
 import (
 	"encoding/json"
@@ -16,5 +16,6 @@ func Test_ParseVulneDB(t *testing.T) {
 	assert.NoError(t, err)
 	b, err = json.Marshal(kvd)
 	assert.NoError(t, err)
+	//ValidateCveData(kvd.Cves)
 	fmt.Println(string(b))
 }

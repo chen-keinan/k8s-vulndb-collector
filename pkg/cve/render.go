@@ -1,4 +1,4 @@
-package doc
+package cve
 
 import (
 	"encoding/json"
@@ -20,7 +20,7 @@ import (
 var _ renderer.Renderer = &JSONRenderer{}
 
 const (
-	upstreamRepo = "github.com/kubernetes"
+	upstreamRepo = "github.com/kubernetes/"
 )
 
 type JSONRenderer struct {
@@ -388,11 +388,11 @@ func (r *JSONRenderer) Render(w io.Writer, source []byte, n ast.Node) error {
 			return err
 		}
 	}
-	vulns, err := docToCve(r.document)
+	cveDoc, err := docToCve(r.document)
 	if err != nil {
 		return err
 	}
-	b, err := json.MarshalIndent(vulns, "", "  ")
+	b, err := json.MarshalIndent(cveDoc, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -445,6 +445,9 @@ func docToCve(document *Node) (*Content, error) {
 			description.WriteString(n.Text)
 		case NodeTypeBulletList:
 			if parseAffected {
+				if len(affectedVersion) > 0 {
+					continue
+				}
 				for _, c := range n.Content {
 					for _, t := range c.Content {
 						subAffectedVersion, cname := extractAffectedVersionsList(t)
@@ -457,6 +460,9 @@ func docToCve(document *Node) (*Content, error) {
 				parseAffected = false
 			}
 			if parseFixed {
+				if len(fixedVersion) > 0 {
+					continue
+				}
 				for _, c := range n.Content {
 					for _, t := range c.Content {
 						subFixedVersion := extractFixedVersionsList(t)
@@ -479,9 +485,9 @@ func docToCve(document *Node) (*Content, error) {
 	}
 	return &Content{
 		Description:     description.String(),
-		AffectedVersion: affectedVersion,
-		FixedVersion:    fixedVersion,
-		ComponentName:   fmt.Sprintf("%s/%s", upstreamRepo, compName),
+		AffectedVersion: deDupVersions(affectedVersion),
+		FixedVersion:    deDupVersions(fixedVersion),
+		ComponentName:   fmt.Sprintf("%s%s", upstreamRepo, compName),
 		Cvss:            adi.Cvss,
 	}, nil
 }
@@ -495,23 +501,29 @@ type Version struct {
 func extractAffectedVersionsList(node *Node) ([]Version, string) {
 	versions := make([]Version, 0)
 	var compName string
-	if len(node.Content) > 1 {
-		for i := 1; i < len(node.Content); i = i + 2 {
-			var from, to string
-			compName, from = extractNameVersion(node.Content[i-1].Text)
-			v := Version{}
-			if _, err := version.Parse(from); err == nil {
-				v.From = sanitizeVersion(from)
-			}
-			_, to = extractNameVersion(node.Content[i].Text)
-			sanitazedTo := sanitizeVersion(to)
-			if len(v.From) == 0 {
-				v.From = sanitazedTo
-			}
-			v.To = sanitazedTo
-			versions = append(versions, v)
-		}
+	initialIndex := 1
+	if len(node.Content) == 1 {
+		initialIndex = 0
 	}
+	for i := initialIndex; i < len(node.Content); i = i + 2 {
+		var from, to, sVer string
+		if i > 0 {
+			compName, from = extractNameVersion(node.Content[i-1].Text)
+			sVer = sanitizeVersion(from)
+		}
+		v := Version{}
+		if _, err := version.Parse(sVer); err == nil {
+			v.From = sVer
+		}
+		_, to = extractNameVersion(node.Content[i].Text)
+		sanitazedTo := sanitizeVersion(to)
+		if _, err := version.Parse(sanitazedTo); err == nil && len(v.From) == 0 {
+			v.From = sanitazedTo
+		}
+		v.To = sanitazedTo
+		versions = append(versions, v)
+	}
+
 	return versions, compName
 }
 
@@ -558,7 +570,7 @@ func sanitizeVersion(version string) string {
 	if version == ">=" {
 		return "2.0.0"
 	}
-	return trimString(version, []string{"v", "V"})
+	return trimString(version, []string{"v", "V", "-"})
 }
 
 func extractNameVersion(nameVersion string) (string, string) {
@@ -592,6 +604,7 @@ func addionalDataFromDescription(description string) AdditionalFields {
 		"kubelet",
 		"etcd",
 		"kube-apiserver",
+		"kubectl",
 	},
 	)
 	return AdditionalFields{
@@ -626,8 +639,21 @@ func lookForCvssInDesc(description string) string {
 	if cvssIndex != -1 {
 		splittedCvss := strings.Split(description[cvssIndex:], " ")
 		if len(splittedCvss) > 0 {
-			return strings.Trim(splittedCvss[0], ")")
+			fmt.Println(splittedCvss[0][:44])
+			return splittedCvss[0][:44]
 		}
 	}
 	return ""
+}
+
+func deDupVersions(versions []Version) []Version {
+	dedupVersion := make([]Version, 0)
+	versionMap := make(map[string]Version)
+	for _, v := range versions {
+		versionMap[fmt.Sprintf("%s-%s-%s", v.Fixed, v.From, v.To)] = v
+	}
+	for _, v := range versionMap {
+		dedupVersion = append(dedupVersion, v)
+	}
+	return dedupVersion
 }
