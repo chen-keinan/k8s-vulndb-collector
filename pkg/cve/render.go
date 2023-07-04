@@ -639,7 +639,6 @@ func lookForCvssInDesc(description string) string {
 	if cvssIndex != -1 {
 		splittedCvss := strings.Split(description[cvssIndex:], " ")
 		if len(splittedCvss) > 0 {
-			fmt.Println(splittedCvss[0][:44])
 			return splittedCvss[0][:44]
 		}
 	}
