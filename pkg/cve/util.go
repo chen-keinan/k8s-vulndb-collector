@@ -39,7 +39,10 @@ func versionParts(line string) ([]string, string) {
 	findVersionParts := make([]string, 0)
 	versionRex := `(?P<name>[^\s]+)?\s+v?(?P<version>\d+\.\d+\.\d+).*.v?(?P<version2>\d+\.\d+\.\d+)|\s*(\d+\.\d+\.\d+)\s*|(?P<name2>[^\s]+)?\s+v?(?P<version3>\d+\.\d+\.\d+)`
 	regex := regexp.MustCompile(versionRex)
-	parts := regex.FindStringSubmatch(updatedLine)
+	parts := regex.FindStringSubmatch(line)
+	if isIP(updatedLine) {
+		return findVersionParts, ""
+	}
 	for i, p := range parts {
 		if i == 0 {
 			continue
@@ -53,6 +56,13 @@ func versionParts(line string) ([]string, string) {
 		}
 	}
 	return findVersionParts, sign
+}
+
+func isIP(value string) bool {
+	ipregex := `(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])`
+	regex := regexp.MustCompile(ipregex)
+	parts := regex.FindStringSubmatch(value)
+	return len(parts) > 0
 }
 
 func updatedLine(versionParts []string, sign string) string {

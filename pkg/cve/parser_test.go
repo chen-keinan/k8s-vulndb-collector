@@ -13,9 +13,9 @@ func Test_ParseVulneDB(t *testing.T) {
 	assert.NoError(t, err)
 	kvd, err := ParseVulneDB(b)
 	assert.NoError(t, err)
-	gotVulnDB, err := json.Marshal(kvd)
-	//os.WriteFile("expected-vulndb.json",gotVulnDB,777)
+	gotVulnDB, err := json.Marshal(kvd.Cves)
 	assert.NoError(t, err)
 	wantVulnDB, err := os.ReadFile("./testdata/expected-vulndb.json")
+	assert.NoError(t, err)
 	assert.Equal(t, string(wantVulnDB), string(gotVulnDB))
 }

@@ -143,33 +143,29 @@ func ValidateCveData(cves []Vulnerability) {
 	for _, cve := range cves {
 		// validate id
 		if len(cve.ID) == 0 {
-			fmt.Printf("id is mssing on cve #%s", cve.ID)
+			fmt.Printf("\nid is mssing on cve #%s", cve.ID)
 		}
 		if len(cve.CreatedAt) == 0 {
-			fmt.Printf("CreatedAt is mssing on cve #%s", cve.ID)
+			fmt.Printf("\nCreatedAt is mssing on cve #%s", cve.ID)
 		}
 		if len(cve.Summary) == 0 {
-			fmt.Printf("Summary is mssing on cve #%s", cve.ID)
+			fmt.Printf("\nSummary is mssing on cve #%s", cve.ID)
 		}
 		if len(strings.TrimPrefix(cve.Component, upstreamRepo)) == 0 {
-			fmt.Printf("Component is mssing on cve #%s", cve.ID)
+			fmt.Printf("\nComponent is mssing on cve #%s", cve.ID)
 		}
 		if len(cve.Description) == 0 {
-			fmt.Printf("Description is mssing on cve #%s", cve.ID)
+			fmt.Printf("\nDescription is mssing on cve #%s", cve.ID)
 		}
-		/*
-			if len(cve.AffectedVersion) == 0 {
-				fmt.Println(fmt.Sprintf("AffectedVersion is mssing on cve #%s", cve.ID))
-			}*/
 		if len(cve.AffectedVersion) > 0 {
 			for _, v := range cve.AffectedVersion {
 				_, err := version.Parse(v.From)
 				if err != nil {
-					fmt.Printf("AffectedVersion From %s is invalid on cve #%s", v.From, cve.ID)
+					fmt.Printf("\nAffectedVersion From %s is invalid on cve #%s", v.From, cve.ID)
 				}
 				_, err = version.Parse(v.To)
 				if err != nil {
-					fmt.Printf("AffectedVersion To %s is invalid on cve #%s", v.To, cve.ID)
+					fmt.Printf("\nAffectedVersion To %s is invalid on cve #%s", v.To, cve.ID)
 				}
 			}
 		}
@@ -178,12 +174,12 @@ func ValidateCveData(cves []Vulnerability) {
 			for _, v := range cve.FixedVersion {
 				_, err := version.Parse(v.Fixed)
 				if err != nil {
-					fmt.Printf("FixedVersion Fixed %s is invalid on cve #%s", v.From, cve.ID)
+					fmt.Printf("\nFixedVersion Fixed %s is invalid on cve #%s", v.From, cve.ID)
 				}
 			}
 		}
 		if len(cve.Urls) == 0 {
-			fmt.Printf("Urls is mssing on cve #%s", cve.ID)
+			fmt.Printf("\nUrls is mssing on cve #%s", cve.ID)
 		}
 	}
 }

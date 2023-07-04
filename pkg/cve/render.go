@@ -483,6 +483,14 @@ func docToCve(document *Node) (*Content, error) {
 	if len(compName) == 0 {
 		compName = adi.Component
 	}
+	dver := deDupVersions(affectedVersion)
+	if len(dver) != len(affectedVersion) {
+		fmt.Println("dup")
+	}
+	dAff := deDupVersions(fixedVersion)
+	if len(dAff) != len(fixedVersion) {
+		fmt.Println("dup")
+	}
 	return &Content{
 		Description:     description.String(),
 		AffectedVersion: deDupVersions(affectedVersion),
@@ -649,10 +657,9 @@ func deDupVersions(versions []Version) []Version {
 	dedupVersion := make([]Version, 0)
 	versionMap := make(map[string]Version)
 	for _, v := range versions {
-		versionMap[fmt.Sprintf("%s-%s-%s", v.Fixed, v.From, v.To)] = v
-	}
-	for _, v := range versionMap {
-		dedupVersion = append(dedupVersion, v)
+		if _, ok := versionMap[fmt.Sprintf("%s-%s-%s", v.Fixed, v.From, v.To)]; !ok {
+			dedupVersion = append(dedupVersion, v)
+		}
 	}
 	return dedupVersion
 }
